@@ -17,12 +17,13 @@ class DashboardController extends Controller
     }
 
     /**
-     * Show the application dashboard.
+     * Show the application d   ashboard.
      *
      * @return \Illuminate\View\View
      */
     public function index()
-    {
-        return view('dashboard');
-    }
+{
+    $user = auth()->user(); // Get the authenticated user
+    return view('dashboard', compact('user'));
+}
 }   
