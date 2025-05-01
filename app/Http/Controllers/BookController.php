@@ -2,144 +2,102 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\Book;
-use App\Models\Category;
-use App\Models\Author;
 use Illuminate\Http\Request;
 
 class BookController extends Controller
 {
     /**
-     * Create a new controller instance.
-     *
-     * @return void
-     */
-    public function __construct()
-    {
-        $this->middleware('auth');
-    }
-
-    /**
      * Display a listing of the books.
      *
-     * @return \Illuminate\View\View
+     * @return \Illuminate\Http\Response
      */
     public function index()
     {
-        $books = Book::with(['category', 'authors'])->get();
+        // In a real application, you would fetch books from the database
+        // For now, we'll use sample data
+        $books = [
+            [
+                'id' => 1,
+                'title' => 'The Midnight Library',
+                'author' => 'Matt Haig',
+                'status' => 'available',
+                'cover' => null
+            ],
+            [
+                'id' => 2,
+                'title' => 'Klara and the Sun',
+                'author' => 'Kazuo Ishiguro',
+                'status' => 'borrowed',
+                'cover' => null
+            ],
+            [
+                'id' => 3,
+                'title' => 'Project Hail Mary',
+                'author' => 'Andy Weir',
+                'status' => 'available',
+                'cover' => null
+            ],
+            [
+                'id' => 4,
+                'title' => 'The Four Winds',
+                'author' => 'Kristin Hannah',
+                'status' => 'available',
+                'cover' => null
+            ],
+            [
+                'id' => 5,
+                'title' => 'The Great Gatsby',
+                'author' => 'F. Scott Fitzgerald',
+                'status' => 'borrowed',
+                'cover' => null
+            ],
+            [
+                'id' => 6,
+                'title' => 'To Kill a Mockingbird',
+                'author' => 'Harper Lee',
+                'status' => 'available',
+                'cover' => null
+            ],
+            [
+                'id' => 7,
+                'title' => '1984',
+                'author' => 'George Orwell',
+                'status' => 'available',
+                'cover' => null
+            ],
+            [
+                'id' => 8,
+                'title' => 'The Alchemist',
+                'author' => 'Paulo Coelho',
+                'status' => 'available',
+                'cover' => null
+            ]
+        ];
+
         return view('books.index', compact('books'));
-    }
-
-    /**
-     * Show the form for creating a new book.
-     *
-     * @return \Illuminate\View\View
-     */
-    public function create()
-    {
-        $categories = Category::all();
-        $authors = Author::all();
-        return view('books.create', compact('categories', 'authors'));
-    }
-
-    /**
-     * Store a newly created book in storage.
-     *
-     * @param  \Illuminate\Http\Request  $request
-     * @return \Illuminate\Http\RedirectResponse
-     */
-    public function store(Request $request)
-    {
-        $request->validate([
-            'book_title' => 'required',
-            'isbn' => 'required|unique:books',
-            'category_id' => 'required|exists:categories,id',
-            'author_ids' => 'required|array',
-            'author_ids.*' => 'exists:authors,id',
-        ]);
-
-        $book = Book::create([
-            'book_title' => $request->book_title,
-            'isbn' => $request->isbn,
-            'publication_date' => $request->publication_date,
-            'publisher' => $request->publisher,
-            'category_id' => $request->category_id,
-        ]);
-
-        $book->authors()->attach($request->author_ids);
-
-        return redirect()->route('books.index')
-            ->with('success', 'Book created successfully.');
     }
 
     /**
      * Display the specified book.
      *
-     * @param  \App\Models\Book  $book
-     * @return \Illuminate\View\View
+     * @param  int  $id
+     * @return \Illuminate\Http\Response
      */
-    public function show(Book $book)
+    public function show($id)
     {
+        // In a real application, you would fetch the book from the database
+        // For now, we'll use sample data
+        $book = [
+            'id' => $id,
+            'title' => 'Sample Book Title',
+            'author' => 'Sample Author',
+            'description' => 'This is a sample book description that would come from the database.',
+            'publication_year' => '2023',
+            'genre' => 'Fiction',
+            'isbn' => '978-3-16-148410-0',
+            'status' => 'available'
+        ];
+
         return view('books.show', compact('book'));
-    }
-
-    /**
-     * Show the form for editing the specified book.
-     *
-     * @param  \App\Models\Book  $book
-     * @return \Illuminate\View\View
-     */
-    public function edit(Book $book)
-    {
-        $categories = Category::all();
-        $authors = Author::all();
-        $selectedAuthors = $book->authors->pluck('id')->toArray();
-        return view('books.edit', compact('book', 'categories', 'authors', 'selectedAuthors'));
-    }
-
-    /**
-     * Update the specified book in storage.
-     *
-     * @param  \Illuminate\Http\Request  $request
-     * @param  \App\Models\Book  $book
-     * @return \Illuminate\Http\RedirectResponse
-     */
-    public function update(Request $request, Book $book)
-    {
-        $request->validate([
-            'book_title' => 'required',
-            'isbn' => 'required|unique:books,isbn,' . $book->id,
-            'category_id' => 'required|exists:categories,id',
-            'author_ids' => 'required|array',
-            'author_ids.*' => 'exists:authors,id',
-        ]);
-
-        $book->update([
-            'book_title' => $request->book_title,
-            'isbn' => $request->isbn,
-            'publication_date' => $request->publication_date,
-            'publisher' => $request->publisher,
-            'category_id' => $request->category_id,
-        ]);
-
-        $book->authors()->sync($request->author_ids);
-
-        return redirect()->route('books.index')
-            ->with('success', 'Book updated successfully.');
-    }
-
-    /**
-     * Remove the specified book from storage.
-     *
-     * @param  \App\Models\Book  $book
-     * @return \Illuminate\Http\RedirectResponse
-     */
-    public function destroy(Book $book)
-    {
-        $book->authors()->detach();
-        $book->delete();
-
-        return redirect()->route('books.index')
-            ->with('success', 'Book deleted successfully.');
     }
 }
