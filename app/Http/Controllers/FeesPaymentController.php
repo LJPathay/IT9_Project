@@ -50,7 +50,6 @@ class FeesPaymentController extends Controller
             ->orderBy('payment_date', 'desc')
             ->get();
 
-        // Changed from 'fees-payment.index' to 'fees_payment.index'
         return view('fees_payments.index', compact(
             'payments',
             'transactions',

@@ -3,9 +3,13 @@ namespace App\Http\Controllers\Auth;
 
 use App\Http\Controllers\Controller;
 use App\Models\User;
+use App\Models\Member;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
+use Carbon\Carbon;
+use Illuminate\Support\Facades\Log;
 
 class RegisterController extends Controller
 {
@@ -27,20 +31,77 @@ class RegisterController extends Controller
      */
     public function register(Request $request)
     {
-        $request->validate([
-            'name' => 'required|string|max:255',
-            'email' => 'required|string|email|max:255|unique:users',
-            'password' => 'required|string|min:8|confirmed',
-        ]);
+        // Log the request data for debugging
+        Log::info('Registration attempt with data:', $request->all());
+        
+        try {
+            $validated = $request->validate([
+                'First_name' => 'required|string|max:255',
+                'Last_name' => 'required|string|max:255',
+                'Middle_name' => 'nullable|string|max:255',
+                'email' => 'required|string|email|max:255|unique:users|unique:members',
+                'password' => 'required|string|min:8|confirmed',
+                'Contact_number' => 'required|string|max:255',
+            ]);
+            
+            Log::info('Validation passed');
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            Log::error('Validation failed:', ['errors' => $e->errors()]);
+            throw $e;
+        }
 
-        $user = User::create([
-            'name' => $request->name,
-            'email' => $request->email,
-            'password' => Hash::make($request->password),
-        ]);
+        // Begin transaction to ensure both records are created or none
+        DB::beginTransaction();
 
-        Auth::login($user);
+        try {
+            // Create full name for the users table
+            $fullName = trim($request->First_name . ' ' . 
+                        ($request->Middle_name ? $request->Middle_name . ' ' : '') . 
+                        $request->Last_name);
+            
+            Log::info('Creating user with name: ' . $fullName);
 
-        return redirect('dashboard');
+            // Create user record
+            $user = User::create([
+                'name' => $fullName,
+                'email' => $request->email,
+                'password' => Hash::make($request->password),
+            ]);
+            
+            Log::info('User created with ID: ' . $user->id);
+
+            // Create member record
+            $member = Member::create([
+                'first_name' => $request->First_name,
+                'last_name' => $request->Last_name,
+                'middle_name' => $request->Middle_name,
+                'email' => $request->email,
+                'password' => Hash::make($request->password),
+                'contact_number' => $request->Contact_number,
+                'join_date' => Carbon::now()->toDateString(),
+            ]);
+            
+            Log::info('Member created with ID: ' . $member->member_id);
+
+            // Commit the transaction
+            DB::commit();
+            Log::info('Transaction committed successfully');
+
+            // Log in the user
+            Auth::login($user);
+            Log::info('User logged in');
+
+            return redirect('dashboard')->with('success', 'Registration successful!');
+        } catch (\Exception $e) {
+            // Something went wrong, rollback the transaction
+            DB::rollBack();
+            
+            Log::error('Registration failed with exception: ' . $e->getMessage());
+            Log::error('Stack trace: ' . $e->getTraceAsString());
+            
+            return redirect()->back()
+                ->withInput()
+                ->withErrors(['error' => 'Registration failed: ' . $e->getMessage()]);
+        }
     }
 }
