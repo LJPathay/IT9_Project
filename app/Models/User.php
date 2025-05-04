@@ -43,4 +43,11 @@ class User extends Authenticatable
         'password' => 'hashed',
     ];
     
+    /**
+     * Get the member associated with the user.
+     */
+    public function member()
+    {
+        return $this->hasOne(Member::class, 'email', 'email');
+    }
 }

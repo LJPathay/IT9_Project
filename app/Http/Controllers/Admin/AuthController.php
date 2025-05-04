@@ -38,7 +38,7 @@ class AuthController extends Controller
             $request->session()->put('admin_authenticated', true);
             
             // Redirect to admin dashboard
-            return redirect()->route('admin.index');
+            return redirect()->route('admin.    ');
         }
 
         // If authentication fails, redirect back with error
