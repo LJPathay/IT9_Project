@@ -16,16 +16,11 @@ class Loan extends Model
      * @var array
      */
     protected $fillable = [
-        'user_id',
-        'book_id',
-        'borrowed_date',
+        'copy_id',
+        'member_id',
+        'loan_date',
         'due_date',
-        'returned_date',
-        'renewals',
-        'renewal_date',
-        'status',
-        'notes',
-        'librarian_id',
+        'return_date',
     ];
 
     /**
@@ -337,5 +332,15 @@ class Loan extends Model
     public function scopeForUser($query, $userId)
     {
         return $query->where('user_id', $userId);
+    }
+
+    public function bookCopy()
+    {
+        return $this->belongsTo(\App\Models\BookCopy::class, 'copy_id', 'copy_id');
+    }
+
+    public function member()
+    {
+        return $this->belongsTo(\App\Models\Member::class, 'member_id', 'member_id');
     }
 }

@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Book;
+use App\Models\Category;
 use Illuminate\Http\Request;
 
 class BookController extends Controller
@@ -11,68 +13,23 @@ class BookController extends Controller
      *
      * @return \Illuminate\Http\Response
      */
-    public function index()
+    public function index(Request $request)
     {
-        // In a real application, you would fetch books from the database
-        // For now, we'll use sample data
-        $books = [
-            [
-                'id' => 1,
-                'title' => 'The Midnight Library',
-                'author' => 'Matt Haig',
-                'status' => 'available',
-                'cover' => null
-            ],
-            [
-                'id' => 2,
-                'title' => 'Klara and the Sun',
-                'author' => 'Kazuo Ishiguro',
-                'status' => 'borrowed',
-                'cover' => null
-            ],
-            [
-                'id' => 3,
-                'title' => 'Project Hail Mary',
-                'author' => 'Andy Weir',
-                'status' => 'available',
-                'cover' => null
-            ],
-            [
-                'id' => 4,
-                'title' => 'The Four Winds',
-                'author' => 'Kristin Hannah',
-                'status' => 'available',
-                'cover' => null
-            ],
-            [
-                'id' => 5,
-                'title' => 'The Great Gatsby',
-                'author' => 'F. Scott Fitzgerald',
-                'status' => 'borrowed',
-                'cover' => null
-            ],
-            [
-                'id' => 6,
-                'title' => 'To Kill a Mockingbird',
-                'author' => 'Harper Lee',
-                'status' => 'available',
-                'cover' => null
-            ],
-            [
-                'id' => 7,
-                'title' => '1984',
-                'author' => 'George Orwell',
-                'status' => 'available',
-                'cover' => null
-            ],
-            [
-                'id' => 8,
-                'title' => 'The Alchemist',
-                'author' => 'Paulo Coelho',
-                'status' => 'available',
-                'cover' => null
-            ]
-        ];
+        $query = Book::with('category');
+
+        // Filter by category if provided
+        if ($request->has('category') && $request->category !== '') {
+            $query->where('category_id', $request->category);
+        }
+
+        $books = $query->get();
+
+        // If it's an AJAX request, return JSON
+        if ($request->ajax()) {
+            return response()->json([
+                'books' => $books
+            ]);
+        }
 
         return view('books.index', compact('books'));
     }
@@ -85,19 +42,36 @@ class BookController extends Controller
      */
     public function show($id)
     {
-        // In a real application, you would fetch the book from the database
-        // For now, we'll use sample data
-        $book = [
-            'id' => $id,
-            'title' => 'Sample Book Title',
-            'author' => 'Sample Author',
-            'description' => 'This is a sample book description that would come from the database.',
-            'publication_year' => '2023',
-            'genre' => 'Fiction',
-            'isbn' => '978-3-16-148410-0',
-            'status' => 'available'
-        ];
-
+        $book = Book::with('category')->where('book_id', $id)->firstOrFail();
         return view('books.show', compact('book'));
+    }
+
+    public function borrow(Request $request, $id)
+    {
+        $book = Book::with('bookCopies')->where('book_id', $id)->firstOrFail();
+        $user = auth()->user();
+        $member = \App\Models\Member::where('email', $user->email)->first();
+        if (!$member) {
+            return response()->json(['success' => false, 'message' => 'No member profile found.'], 403);
+        }
+        $copy = $book->bookCopies()->where('status', 'available')->first();
+        if (!$copy) {
+            return response()->json(['success' => false, 'message' => 'No available copies.'], 422);
+        }
+        // Mark as loaned
+        $copy->status = 'loaned';
+        $copy->save();
+        // Debug: check copy_id
+        if (!$copy->copy_id) {
+            return response()->json(['success' => false, 'message' => 'Copy ID not found.'], 500);
+        }
+        // Create a loan record
+        $loan = \App\Models\Loan::create([
+            'member_id' => $member->member_id,
+            'copy_id' => $copy->copy_id,
+            'loan_date' => now(),
+            'due_date' => now()->addDays(14),
+        ]);
+        return response()->json(['success' => true, 'message' => 'Book borrowed successfully!']);
     }
 }

@@ -52,7 +52,7 @@ class BookCopyController extends Controller
             'book_id' => 'required|exists:books,id',
             'status' => 'required|in:available,loaned,reserved,maintenance',
         ]);
-
+        
         BookCopy::create([
             'book_id' => $request->book_id,
             'acquisition_date' => $request->acquisition_date ?? now(),

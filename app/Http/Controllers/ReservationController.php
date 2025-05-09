@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use Illuminate\Http\Request;
 use App\Models\Reservation;
 use App\Models\Book;
+use App\Models\Member;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Auth;
 
@@ -17,32 +18,28 @@ class ReservationController extends Controller
      */
     public function index()
     {
-        $user = Auth::user();
-        if (!$user->member) {
-            return redirect()->route('dashboard')->with('error', 'No member profile found for your account.');
+        $member = Member::where('email', Auth::user()->email)->first();
+        
+        if (!$member) {
+            return redirect()->route('profile.index')
+                ->with('error', 'Please complete your member profile first.');
         }
-        
-        $memberId = $user->member->member_id;
-        
-        // Get active reservations
-        $activeReservations = Reservation::with(['book'])
-            ->where('member_id', $memberId)
+
+        $activeReservations = Reservation::with(['book', 'member'])
+            ->where('member_id', $member->member_id)
             ->whereIn('status', ['pending', 'ready'])
-            ->orderBy('reservation_date', 'desc')
-            ->get();
-            
-        // Get reservation history
-        $reservationHistory = Reservation::with(['book'])
-            ->where('member_id', $memberId)
+            ->orderBy('created_at', 'desc')
+            ->paginate(10);
+
+        $reservationHistory = Reservation::with(['book', 'member'])
+            ->where('member_id', $member->member_id)
             ->whereIn('status', ['completed', 'cancelled', 'expired'])
-            ->orderBy('reservation_date', 'desc')
-            ->limit(10) // Limit to last 10 for performance
-            ->get();
-        
-        return view('Reservations.index', [
-            'activeReservations' => $activeReservations,
-            'reservationHistory' => $reservationHistory
-        ]);
+            ->orderBy('created_at', 'desc')
+            ->paginate(10);
+
+        $pendingReservations = Reservation::where('status', 'pending')->get();
+
+        return view('reservations.index', compact('activeReservations', 'reservationHistory', 'pendingReservations'));
     }
 
     /**
@@ -65,74 +62,109 @@ class ReservationController extends Controller
      */
     public function store(Request $request)
     {
-        $request->validate([
-            'book_id' => 'required|exists:books,book_id',
-        ]);
-        
-        $user = Auth::user();
-        if (!$user->member) {
-            return redirect()->route('dashboard')->with('error', 'No member profile found for your account.');
-        }
-        $memberId = $user->member->member_id;
-        
-        // Check if user already has a reservation for this book
-        $existingReservation = Reservation::where('member_id', $memberId)
-            ->where('book_id', $request->book_id)
-            ->whereIn('status', ['pending', 'ready'])
-            ->first();
+        try {
+            \Log::info('Reservation request received', [
+                'request_data' => $request->all(),
+                'user_email' => Auth::user()->email
+            ]);
+
+            $request->validate([
+                'book_id' => 'required|exists:books,book_id',
+                'reservation_date' => 'required|date|after:today'
+            ]);
+
+            $member = Member::where('email', Auth::user()->email)->first();
             
-        if ($existingReservation) {
-            return redirect()->back()->with('error', 'You already have a reservation for this book.');
-        }
-        
-        // Check if any copies are available for reservation
-        $book = Book::with('bookCopies')->find($request->book_id);
-        $availableForReservation = $book->bookCopies->where('status', 'available')->count() > 0;
-        
-        // Create reservation
-        $reservation = new Reservation();
-        $reservation->member_id = $memberId;
-        $reservation->book_id = $request->book_id;
-        $reservation->reservation_date = Carbon::now();
-        $reservation->expiry_date = Carbon::now()->addDays(7); // Reservations valid for 7 days
-        $reservation->status = $availableForReservation ? 'ready' : 'pending';
-        $reservation->save();
-        
-        $message = $availableForReservation 
-            ? 'Book reserved successfully! It is ready for pickup.' 
-            : 'Book reserved successfully! You will be notified when it becomes available.';
+            \Log::info('Member lookup result', [
+                'member_found' => $member ? true : false,
+                'member_id' => $member ? $member->member_id : null
+            ]);
             
-        return redirect()->route('reservations.index')->with('success', $message);
+            if (!$member) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Please complete your member profile first.'
+                ], 403);
+            }
+
+            // Check if book is already reserved by this member
+            $existingReservation = Reservation::where('book_id', $request->book_id)
+                ->where('member_id', $member->member_id)
+                ->whereIn('status', ['pending', 'ready'])
+                ->first();
+
+            if ($existingReservation) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'You have already reserved this book.'
+                ], 422);
+            }
+
+            $reservation = Reservation::create([
+                'book_id' => $request->book_id,
+                'member_id' => $member->member_id,
+                'reservation_date' => $request->reservation_date,
+                'status' => 'pending'
+            ]);
+
+            \Log::info('Reservation created successfully', [
+                'reservation_id' => $reservation->reservation_id
+            ]);
+
+            // If AJAX, return JSON
+            if ($request->ajax()) {
+                return response()->json([
+                    'success' => true,
+                    'message' => 'Book reserved successfully!',
+                    'reservation' => $reservation
+                ]);
+            }
+
+            // Otherwise, redirect back with a session flash message
+            return redirect()->back()->with('success', 'Reservation booked successfully!');
+        } catch (\Exception $e) {
+            \Log::error('Error creating reservation', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'An error occurred: ' . $e->getMessage()
+            ], 500);
+        }
     }
 
     /**
      * Cancel a reservation.
      *
-     * @param  int  $id
+     * @param  \App\Models\Reservation  $reservation
      * @return \Illuminate\Http\Response
      */
-    public function cancel($id)
+    public function cancel(Reservation $reservation)
     {
-        $user = Auth::user();
-        if (!$user->member) {
-            return redirect()->route('dashboard')->with('error', 'No member profile found for your account.');
+        $member = Member::where('email', Auth::user()->email)->first();
+        
+        if (!$member || $reservation->member_id !== $member->member_id) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Unauthorized action.'
+            ], 403);
         }
-        $memberId = $user->member->member_id;
-        
-        $reservation = Reservation::where('reservation_id', $id)
-            ->where('member_id', $memberId)
-            ->whereIn('status', ['pending', 'ready'])
-            ->first();
-            
-        if (!$reservation) {
-            return redirect()->route('reservations.index')->with('error', 'Reservation not found or cannot be cancelled.');
+
+        if ($reservation->status !== 'pending') {
+            return response()->json([
+                'success' => false,
+                'message' => 'Only pending reservations can be cancelled.'
+            ], 422);
         }
-        
-        $reservation->status = 'cancelled';
-        $reservation->completion_date = Carbon::now();
-        $reservation->save();
-        
-        return redirect()->route('reservations.index')->with('success', 'Reservation cancelled successfully.');
+
+        $reservation->update(['status' => 'cancelled']);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Reservation cancelled successfully.'
+        ]);
     }
 
     /**
@@ -143,14 +175,14 @@ class ReservationController extends Controller
      */
     public function checkout($id)
     {
-        $user = Auth::user();
-        if (!$user->member) {
+        $member = Member::where('email', Auth::user()->email)->first();
+        
+        if (!$member) {
             return redirect()->route('dashboard')->with('error', 'No member profile found for your account.');
         }
-        $memberId = $user->member->member_id;
         
         $reservation = Reservation::where('reservation_id', $id)
-            ->where('member_id', $memberId)
+            ->where('member_id', $member->member_id)
             ->where('status', 'ready')
             ->first();
             
@@ -163,7 +195,10 @@ class ReservationController extends Controller
             $query->where('status', 'available');
         }])->find($reservation->book_id);
         
-        if ($book->bookCopies->isEmpty()) {
+        $onLoanCopies = $book->bookCopies->whereIn('status', ['loaned', 'borrowed'])->count();
+        $isAvailable = $onLoanCopies > 0;
+        
+        if (!$isAvailable) {
             return redirect()->route('reservations.index')->with('error', 'No copies available for checkout.');
         }
         
@@ -171,15 +206,15 @@ class ReservationController extends Controller
         
         // Create a new loan
         $loan = new \App\Models\Loan();
-        $loan->member_id = $memberId;
+        $loan->member_id = $member->member_id;
         $loan->copy_id = $bookCopy->copy_id;
         $loan->borrowed_date = Carbon::now();
-        $loan->due_date = Carbon::now()->addDays(14); // Standard loan period of 14 days
+        $loan->due_date = Carbon::now()->addDays(4); // Standard loan period of 14 days
         $loan->status = 'borrowed';
         $loan->save();
         
         // Update book copy status
-        $bookCopy->status = 'borrowed';
+        $bookCopy->status = 'loaned';
         $bookCopy->save();
         
         // Mark reservation as completed
@@ -188,5 +223,14 @@ class ReservationController extends Controller
         $reservation->save();
         
         return redirect()->route('loans.index')->with('success', 'Book checked out successfully.');
+    }
+
+    public function update(Request $request, $id)
+    {
+        $reservation = Reservation::findOrFail($id);
+        $reservation->status = $request->status;
+        $reservation->save();
+        
+        return redirect()->back()->with('success', 'Reservation status updated successfully');
     }
 }

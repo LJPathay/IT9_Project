@@ -11,6 +11,7 @@ return new class extends Migration
         Schema::create('fee_types', function (Blueprint $table) {
             $table->id('fee_type_id');
             $table->string('name');
+            $table->decimal('rate', 10, 2);
             $table->text('description')->nullable();
             $table->timestamps();
         });

@@ -26,8 +26,53 @@ class LoanController extends Controller
      */
     public function index()
     {
-        $loans = Loan::with(['bookCopy.book', 'member'])->get();
-        return view('loans.index', compact('loans'));
+        $user = auth()->user();
+        $activeLoans = Loan::with(['bookCopy.book', 'member'])
+            ->where('member_id', $user->id)
+            ->whereNull('return_date')
+            ->orderBy('due_date', 'asc')
+            ->get()
+            ->map(function ($loan) {
+                $dueDate = \Carbon\Carbon::parse($loan->due_date);
+                $now = \Carbon\Carbon::now();
+                $daysUntilDue = $now->diffInDays($dueDate, false);
+                
+                return [
+                    'id' => $loan->loan_id,
+                    'book_id' => $loan->bookCopy->book->id,
+                    'title' => $loan->bookCopy->book->title,
+                    'publisher' => $loan->bookCopy->book->publisher,
+                    'author' => $loan->bookCopy->book->author,
+                    'borrowed_date' => \Carbon\Carbon::parse($loan->loan_date)->format('M d, Y'),
+                    'due_date' => $dueDate->format('M d, Y'),
+                    'status' => $daysUntilDue < 0 ? 'overdue' : ($daysUntilDue <= 3 ? 'duesoon' : 'ontime'),
+                    'can_renew' => $loan->renewals < 2, // Assuming max 2 renewals
+                    'renewals' => $loan->renewals ?? 0
+                ];
+            });
+
+        $loanHistory = Loan::with(['bookCopy.book', 'member'])
+            ->where('member_id', $user->id)
+            ->whereNotNull('return_date')
+            ->orderBy('return_date', 'desc')
+            ->get()
+            ->map(function ($loan) {
+                $returnDate = \Carbon\Carbon::parse($loan->return_date);
+                $dueDate = \Carbon\Carbon::parse($loan->due_date);
+                
+                return [
+                    'id' => $loan->loan_id,
+                    'book_id' => $loan->bookCopy->book->id,
+                    'title' => $loan->bookCopy->book->title,
+                    'publisher' => $loan->bookCopy->book->publisher,
+                    'author' => $loan->bookCopy->book->author,
+                    'borrowed_date' => \Carbon\Carbon::parse($loan->loan_date)->format('M d, Y'),
+                    'returned_date' => $returnDate->format('M d, Y'),
+                    'status' => $returnDate > $dueDate ? 'returned-late' : 'ontime'
+                ];
+            });
+
+        return view('loans.index', compact('activeLoans', 'loanHistory'));
     }
 
     /**
@@ -174,5 +219,38 @@ class LoanController extends Controller
 
         return redirect()->route('loans.index')
             ->with('success', 'Loan deleted successfully.');
+    }
+
+    /**
+     * Update the specified loan in storage.
+     *
+     * @param  \Illuminate\Http\Request  $request
+     * @param  \App\Models\Loan  $loan
+     * @return \Illuminate\Http\RedirectResponse
+     */
+    public function returnLoan($id)
+    {
+        // Eager load the bookCopy relationship
+        $loan = Loan::with('bookCopy')->find($id);
+
+        if (!$loan) {
+            return response()->json(['success' => false, 'message' => 'Loan not found'], 404);
+        }
+
+        // Update loan with return date and status
+        $loan->update([
+            'return_date' => now(),
+            'status' => 'returned'
+        ]);
+
+        // Update the book status to 'available', with error handling
+        $bookCopy = $loan->bookCopy;
+        if ($bookCopy) {
+            $bookCopy->update(['status' => 'available']);
+        } else {
+            return response()->json(['success' => false, 'message' => 'Book copy not found for this loan.'], 404);
+        }
+
+        return response()->json(['success' => true, 'message' => 'Book returned successfully']);
     }
 }

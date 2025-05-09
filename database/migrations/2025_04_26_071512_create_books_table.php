@@ -15,6 +15,8 @@ return new class extends Migration
             $table->date('publication_date')->nullable();
             $table->string('publisher')->nullable();
             $table->foreignId('category_id')->constrained('categories', 'category_id');
+            $table->text('description')->nullable();
+            $table->string('cover')->nullable();
             $table->timestamps();
         });
     }

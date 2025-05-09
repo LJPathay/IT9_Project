@@ -36,12 +36,12 @@ class RegisterController extends Controller
         
         try {
             $validated = $request->validate([
-                'First_name' => 'required|string|max:255',
-                'Last_name' => 'required|string|max:255',
-                'Middle_name' => 'nullable|string|max:255',
-                'email' => 'required|string|email|max:255|unique:users|unique:members',
+                'first_name' => 'required|string|max:255',
+                'last_name' => 'required|string|max:255',
+                'middle_name' => 'nullable|string|max:255',
+                'email' => 'required|string|email|max:255|unique:users',
                 'password' => 'required|string|min:8|confirmed',
-                'Contact_number' => 'required|string|max:255',
+                'contact_number' => 'required|string|max:255',
             ]);
             
             Log::info('Validation passed');
@@ -55,9 +55,9 @@ class RegisterController extends Controller
 
         try {
             // Create full name for the users table
-            $fullName = trim($request->First_name . ' ' . 
-                        ($request->Middle_name ? $request->Middle_name . ' ' : '') . 
-                        $request->Last_name);
+            $fullName = trim($request->first_name . ' ' . 
+                        ($request->middle_name ? $request->middle_name . ' ' : '') . 
+                        $request->last_name);
             
             Log::info('Creating user with name: ' . $fullName);
 
@@ -70,14 +70,15 @@ class RegisterController extends Controller
             
             Log::info('User created with ID: ' . $user->id);
 
-            // Create member record
+            // Create member record with the same ID as the user
             $member = Member::create([
-                'first_name' => $request->First_name,
-                'last_name' => $request->Last_name,
-                'middle_name' => $request->Middle_name,
+                'member_id' => $user->id, // Use the same ID as the user
+                'first_name' => $request->first_name,
+                'last_name' => $request->last_name,
+                'middle_name' => $request->middle_name,
                 'email' => $request->email,
                 'password' => Hash::make($request->password),
-                'contact_number' => $request->Contact_number,
+                'contact_number' => $request->contact_number,
                 'join_date' => Carbon::now()->toDateString(),
             ]);
             

@@ -22,6 +22,7 @@ class Member extends Model
      * @var array
      */
     protected $fillable = [
+        'user_id',
         'first_name',
         'last_name',
         'middle_name',
@@ -38,6 +39,10 @@ class Member extends Model
      */
     protected $hidden = [
         'password',
+    ];
+
+    protected $casts = [
+        'join_date' => 'date',
     ];
 
     /**
@@ -62,5 +67,10 @@ class Member extends Model
     public function transactions()
     {
         return $this->hasMany(Transaction::class, 'member_id');
+    }
+
+    public function user()
+    {
+        return $this->belongsTo(User::class);
     }
 }

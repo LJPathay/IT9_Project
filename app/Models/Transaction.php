@@ -40,13 +40,10 @@ class Transaction extends Model
     protected $fillable = [
         'member_id',
         'fee_type_id',
-        'item_id',
-        'description',
         'amount',
-        'issue_date',
+        'status',
         'due_date',
-        'status', // pending, paid, waived, etc.
-        'notes',
+        'payment_date'
     ];
 
     /**
@@ -55,23 +52,22 @@ class Transaction extends Model
      * @var array
      */
     protected $casts = [
-        'amount' => 'decimal:2',
-        'issue_date' => 'datetime',
         'due_date' => 'datetime',
+        'payment_date' => 'datetime'
     ];
 
     /**
      * Get the user (member) that owns the transaction.
      */
-    public function user(): BelongsTo
+    public function member(): BelongsTo
     {
-        return $this->belongsTo(User::class, 'member_id');
+        return $this->belongsTo(Member::class);
     }
 
     /**
      * Get the fee type associated with the transaction.
      */
-    public function feeType(): BelongsTo
+    public function fee_type(): BelongsTo
     {
         return $this->belongsTo(FeeType::class);
     }
@@ -128,5 +124,10 @@ class Transaction extends Model
     public function getFormattedAmountAttribute(): string
     {
         return '$' . number_format($this->amount, 2);
+    }
+
+    public function loan()
+    {
+        return $this->belongsTo(Loan::class, 'loan_id', 'loan_id');
     }
 }

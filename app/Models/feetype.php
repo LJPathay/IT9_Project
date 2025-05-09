@@ -17,6 +17,7 @@ class FeeType extends Model
      */
     protected $fillable = [
         'name',
+        'rate',
         'description',
         'amount',
         'is_flat_fee', // Boolean that indicates if this is a flat fee or a per-day fee

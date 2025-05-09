@@ -48,6 +48,6 @@ class User extends Authenticatable
      */
     public function member()
     {
-        return $this->hasOne(Member::class, 'email', 'email');
+        return $this->hasOne(Member::class, 'member_id', 'id');
     }
 }

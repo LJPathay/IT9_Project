@@ -71,20 +71,22 @@ class ProfileController extends Controller
     public function updateAvatar(Request $request)
     {
         $request->validate([
-            'avatar' => ['required', 'image', 'max:1024'],
+            'avatar' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:2048',
         ]);
 
         $user = Auth::user();
 
-        // Delete old avatar if exists
-        if ($user->avatar) {
-            Storage::disk('public')->delete($user->avatar);
+        if ($request->hasFile('avatar')) {
+            $file = $request->file('avatar');
+            $filename = uniqid() . '.' . $file->getClientOriginalExtension();
+            $destination = public_path('avatars');
+            if (!file_exists($destination)) {
+                mkdir($destination, 0777, true);
+            }
+            $file->move($destination, $filename);
+            $user->avatar = 'avatars/' . $filename;
+            $user->save();
         }
-
-        // Store new avatar
-        $path = $request->file('avatar')->store('avatars', 'public');
-        $user->avatar = $path;
-        $user->save();
 
         return redirect()->route('profile.index')->with('success', 'Avatar updated successfully!');
     }

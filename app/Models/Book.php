@@ -9,17 +9,14 @@ class Book extends Model
 {
     use HasFactory;
 
+    protected $primaryKey = 'book_id';
+
     protected $fillable = [
-        'title',
-        'author',
+        'book_title',
         'isbn',
-        'publication_year',
+        'publication_date',
         'publisher',
         'category_id',
-        'description',
-        'total_copies',
-        'available_copies',
-        'cover_image',
     ];
 
     public function loans()
@@ -34,7 +31,23 @@ class Book extends Model
 
     public function category()
     {
-        return $this->belongsTo(Category::class);
+        return $this->belongsTo(Category::class, 'category_id', 'category_id');
+    }
+
+    public function authors()
+    {
+        return $this->belongsToMany(Author::class, 'book_author', 'book_id', 'author_id');
+    }
+
+    public function bookCopies()
+    {
+        return $this->hasMany(BookCopy::class, 'book_id', 'book_id');
+    }
+
+    public function getIsAvailableAttribute()
+    {
+        // A book is available if it has at least one available copy
+        return $this->bookCopies()->where('status', 'available')->count() > 0;
     }
 }
 

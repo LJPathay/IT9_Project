@@ -14,6 +14,7 @@ return new class extends Migration
             $table->string('last_name');
             $table->string('middle_name')->nullable();
             $table->string('email')->unique();
+            $table->string('password');
             $table->string('contact_number')->nullable();
             $table->date('join_date');
             $table->timestamps();

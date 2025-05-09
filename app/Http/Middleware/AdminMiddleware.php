@@ -1,10 +1,13 @@
 <?php
+
 namespace App\Http\Middleware;
 
 use Closure;
 use Illuminate\Http\Request;
+use Symfony\Component\HttpFoundation\Response;
+use Illuminate\Support\Facades\Session;
 
-class AdminAuthentication
+class AdminMiddleware
 {
     /**
      * Handle an incoming request.
@@ -15,10 +18,9 @@ class AdminAuthentication
      */
     public function handle(Request $request, Closure $next)
     {
-        if (!$request->session()->has('admin_authenticated')) {
-            return redirect()->route('admin.login');
+        if (!Session::has('admin_authenticated')) {
+            return redirect()->route('admin.login')->with('error', 'Please login as admin first.');
         }
-
         return $next($request);
     }
 }
